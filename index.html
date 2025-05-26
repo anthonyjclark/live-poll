@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Live Poll</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 2em;
+        }
+
+        .poll {
+            max-width: 400px;
+            margin: auto;
+        }
+
+        .results {
+            margin-top: 2em;
+        }
+
+        .bar {
+            height: 20px;
+            background: #4caf50;
+            margin: 4px 0;
+            color: #fff;
+            text-align: right;
+            padding-right: 5px;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="poll">
+        <h2 id="question">Loading poll...</h2>
+        <form id="pollForm"></form>
+        <button id="voteBtn" disabled>Vote</button>
+        <div class="results" id="results"></div>
+    </div>
+    <script>
+        let selectedOption = null;
+        let pollData = null;
+
+        function fetchPoll() {
+            fetch('get_poll.php')
+                .then(res => res.json())
+                .then(data => {
+                    pollData = data;
+                    document.getElementById('question').textContent = data.question;
+                    const form = document.getElementById('pollForm');
+                    form.innerHTML = '';
+                    data.options.forEach((opt, i) => {
+                        const label = document.createElement('label');
+                        label.innerHTML = `<input type="checkbox" name="option" value="${i}"> ${opt.text}`;
+                        form.appendChild(label);
+                        form.appendChild(document.createElement('br'));
+                    });
+                    form.addEventListener('change', e => {
+                        // Collect all checked options
+                        const checked = Array.from(form.querySelectorAll('input[type=checkbox]:checked')).map(cb => parseInt(cb.value));
+                        selectedOption = checked;
+                        document.getElementById('voteBtn').disabled = checked.length === 0;
+                    });
+                });
+        }
+
+        function fetchResults() {
+            fetch('get_poll.php')
+                .then(res => res.json())
+                .then(showResults);
+        }
+
+        function showResults(data) {
+            const total = data.options.reduce((sum, o) => sum + o.votes, 0);
+            const resultsDiv = document.getElementById('results');
+            resultsDiv.innerHTML = '<h3>Results</h3>';
+            data.options.forEach(opt => {
+                const percent = total ? Math.round((opt.votes / total) * 100) : 0;
+                resultsDiv.innerHTML += `<div>${opt.text}: ${opt.votes} vote(s) <div class="bar" style="width:${percent}%">${percent}%</div></div>`;
+            });
+        }
+
+        document.getElementById('voteBtn').onclick = function () {
+            if (!Array.isArray(selectedOption) || selectedOption.length === 0) return;
+            fetch('vote.php', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ option_indexes: selectedOption })
+            })
+                .then(res => res.json())
+                .then(data => {
+                    if (data.success) {
+                        fetchResults();
+                        document.getElementById('voteBtn').disabled = true;
+                    }
+                });
+        };
+
+        // Initial load
+        fetchPoll();
+        fetchResults();
+        // Poll for results every 2 seconds
+        setInterval(fetchResults, 2000);
+    </script>
+</body>
+
+</html>
