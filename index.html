@@ -2,45 +2,38 @@
 <html lang="en">
 
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="color-scheme" content="light dark">
+    <link rel="stylesheet" type="text/css" href="css/pico.classless.yellow.min.css">
     <title>Live Poll</title>
     <style>
-        body {
-            font-family: Arial, sans-serif;
-            margin: 2em;
-        }
-
         .poll {
-            max-width: 400px;
+            max-width: min(100vw, 400px);
             margin: auto;
         }
 
         .results {
             margin-top: 2em;
         }
-
-        .bar {
-            height: 20px;
-            background: #4caf50;
-            margin: 4px 0;
-            color: #fff;
-            text-align: right;
-            padding-right: 5px;
-        }
     </style>
 </head>
 
 <body>
-    <div class="poll">
-        <h2 id="question">Loading poll...</h2>
-        <form id="pollForm"></form>
-        <button id="voteBtn" disabled>Vote</button>
-        <div class="results" id="results"></div>
-    </div>
+
+    <main>
+        <div class="poll">
+            <h1 id="question">Loading poll...</h1>
+            <form id="pollForm"></form>
+            <button id="voteBtn" disabled>Vote</button>
+            <div id="results" class="results"></div>
+        </div>
+    </main>
+
     <script>
         let selectedOption = null;
         let pollData = null;
+        let lastResetVersion = null;
 
         function fetchPoll() {
             fetch('get_poll.php')
@@ -52,23 +45,48 @@
                     form.innerHTML = '';
                     data.options.forEach((opt, i) => {
                         const label = document.createElement('label');
-                        label.innerHTML = `<input type="checkbox" name="option" value="${i}"> ${opt.text}`;
+                        label.innerHTML = `<input type="checkbox" name="option" value="${i}"><span>${opt.text}</span>`;
                         form.appendChild(label);
-                        form.appendChild(document.createElement('br'));
                     });
                     form.addEventListener('change', e => {
-                        // Collect all checked options
-                        const checked = Array.from(form.querySelectorAll('input[type=checkbox]:checked')).map(cb => parseInt(cb.value));
-                        selectedOption = checked;
-                        document.getElementById('voteBtn').disabled = checked.length === 0;
+                        const checked = Array.from(form.querySelectorAll('input[type=checkbox]:checked'));
+                        selectedOption = checked.map(cb => parseInt(cb.value));
+                        document.getElementById('voteBtn').disabled = checked.length === 0 || hasVoted();
                     });
+                    // Clear selections if reset_version changed
+                    if (lastResetVersion !== null && data.reset_version !== lastResetVersion) {
+                        selectedOption = [];
+                        Array.from(form.querySelectorAll('input[type=checkbox]')).forEach(cb => cb.checked = false);
+                        document.getElementById('voteBtn').disabled = true;
+                        localStorage.removeItem('poll_voted_version');
+                    }
+                    lastResetVersion = data.reset_version;
+                    // Disable vote button if already voted for this version
+                    if (hasVoted()) {
+                        document.getElementById('voteBtn').disabled = true;
+                    }
                 });
         }
 
         function fetchResults() {
             fetch('get_poll.php')
                 .then(res => res.json())
-                .then(showResults);
+                .then(data => {
+                    showResults(data);
+                    // Clear selections if reset_version changed
+                    if (lastResetVersion !== null && data.reset_version !== lastResetVersion) {
+                        selectedOption = [];
+                        const form = document.getElementById('pollForm');
+                        Array.from(form.querySelectorAll('input[type=checkbox]')).forEach(cb => cb.checked = false);
+                        document.getElementById('voteBtn').disabled = true;
+                        localStorage.removeItem('poll_voted_version');
+                    }
+                    lastResetVersion = data.reset_version;
+                    // Disable vote button if already voted for this version
+                    if (hasVoted()) {
+                        document.getElementById('voteBtn').disabled = true;
+                    }
+                });
         }
 
         function showResults(data) {
@@ -77,12 +95,18 @@
             resultsDiv.innerHTML = '<h3>Results</h3>';
             data.options.forEach(opt => {
                 const percent = total ? Math.round((opt.votes / total) * 100) : 0;
-                resultsDiv.innerHTML += `<div>${opt.text}: ${opt.votes} vote(s) <div class="bar" style="width:${percent}%">${percent}%</div></div>`;
+                const voteLabel = opt.votes === 1 ? "vote" : "votes";
+                resultsDiv.innerHTML += `<div>${opt.text}: ${opt.votes} ${voteLabel} <progress value="${percent}" max="100"></progress></div>`;
             });
         }
 
+        function hasVoted() {
+            const version = pollData && pollData.reset_version;
+            return version && localStorage.getItem('poll_voted_version') === version;
+        }
+
         document.getElementById('voteBtn').onclick = function () {
-            if (!Array.isArray(selectedOption) || selectedOption.length === 0) return;
+            if (!Array.isArray(selectedOption) || selectedOption.length === 0 || hasVoted()) return;
             fetch('vote.php', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -91,6 +115,10 @@
                 .then(res => res.json())
                 .then(data => {
                     if (data.success) {
+                        // Mark as voted for this version
+                        if (pollData && pollData.reset_version) {
+                            localStorage.setItem('poll_voted_version', pollData.reset_version);
+                        }
                         fetchResults();
                         document.getElementById('voteBtn').disabled = true;
                     }

@@ -8,3 +8,17 @@ Features to add:
 - [ ] Option to hide results until the poll is closed
 - [ ] Password for admin page
 - [ ] More options on admin page
+- [ ] Timer
+- [ ] Generate [static QR code](https://qr.io/)
+
+Maybe look at Kahoot for ideas?
+
+## Testing
+
+Test the live poll by running the following command:
+
+```bash
+php -S localhost:8000
+```
+
+Then, open your web browser and navigate to `http://localhost:8000`.
