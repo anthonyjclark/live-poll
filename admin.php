@@ -54,7 +54,7 @@ if (empty($_SESSION['admin_authenticated'])) {
 
 // Timer logic using update.php
 if (isset($_POST['timer_action'])) {
-    $poll_file = 'poll_data.txt';
+    $poll_file = 'data.txt';
     $lines = file($poll_file, FILE_IGNORE_NEW_LINES);
     $timer = json_decode($lines[9], true);
     $action = $_POST['timer_action'];
@@ -86,7 +86,7 @@ if (isset($_POST['timer_action'])) {
 }
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && !isset($_POST['admin_passcode']) && !isset($_POST['timer_action'])) {
-    $poll_file = 'poll_data.txt';
+    $poll_file = 'data.txt';
     $lines = file($poll_file, FILE_IGNORE_NEW_LINES);
     $lines[7] = '0,0,0,0,0,0';
     $lines[8] = time();
@@ -95,8 +95,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !isset($_POST['admin_passcode']) &&
     header('Location: ' . $_SERVER['REQUEST_URI']);
     exit;
 }
-// Get timer state from poll_data.txt
-$poll_file = 'poll_data.txt';
+// Get timer state from data.txt
+$poll_file = 'data.txt';
 $timer = [
     'duration' => 0,
     'remaining' => 0,

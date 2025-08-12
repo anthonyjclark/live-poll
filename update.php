@@ -1,8 +1,8 @@
 <?php
-// update.php: Handles poll data, voting, resets, and timer using a single txt file (poll_data.txt)
+// update.php: Handles poll data, voting, resets, and timer using a single txt file (data.txt)
 header('Content-Type: application/json');
 
-$poll_file = 'poll_data.txt';
+$poll_file = 'data.txt';
 
 // File format:
 // Line 0: question
