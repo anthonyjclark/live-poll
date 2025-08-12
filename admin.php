@@ -37,7 +37,7 @@ if (empty($_SESSION['admin_authenticated'])) {
     <body>
     <main>
     <div class="admin">
-        <h2>Admin Login</h2>
+        <h1>Admin Login</h1>
         <?php if (!empty($login_error)) echo '<div style="color:red;">' . htmlspecialchars($login_error) . '</div>'; ?>
         <form method="post">
             <input type="password" name="admin_passcode" placeholder="Enter passcode" required autofocus>
@@ -147,10 +147,10 @@ if (isset($_COOKIE['reset_message'])) {
 <body>
     <main>
     <div class="admin">
-        <h2>Live Poll: Admin Panel</h2>
-            <form method="get" style="float:right;display:inline;">
-                <button type="submit" name="logout" value="1">Logout</button>
-            </form>
+        <form method="get" style="float:right;display:inline;">
+            <button type="submit" name="logout" value="1">Logout</button>
+        </form>
+        <h1>Live Poll: Admin Panel</h1>
         <form method="post">
             <button type="submit">Clear All Votes</button>
         </form>
@@ -160,17 +160,24 @@ if (isset($_COOKIE['reset_message'])) {
         }
         ?>
         <hr>
-        <h3>Timer Controls</h3>
-        <form method="post" class="timer-controls">
-            <label>Set Timer (seconds): <input type="number" name="timer_duration" min="1" value="<?php echo $timer['duration']; ?>" required></label>
-            <button type="submit" name="timer_action" value="set">Set</button>
-            <button type="submit" name="timer_action" value="start" <?php if ($timer['state']==='running') echo 'disabled'; ?>>Start</button>
-            <button type="submit" name="timer_action" value="pause" <?php if ($timer['state']!=='running') echo 'disabled'; ?>>Pause</button>
-            <button type="submit" name="timer_action" value="stop">Stop</button>
+        <h2>Timer Controls</h2>
+        <form method="post" class="timer-controls" style="display: flex; gap: 0.5em; align-items: center;">
+            <div style="display: flex; flex-direction: column; gap: 0.5em; width: 100%;">
+                <label style="margin: 0; flex: 1;">
+                    Set time (seconds):
+                    <input type="number" name="timer_duration" min="1" value="<?php echo $timer['duration']; ?>" required style="width: 100%;">
+                </label>
+                <div style="display: flex; gap: 0.5em;">
+                    <button type="submit" name="timer_action" value="set">Set</button>
+                    <button type="submit" name="timer_action" value="start" <?php if ($timer['state']==='running') echo 'disabled'; ?>>Start</button>
+                    <button type="submit" name="timer_action" value="pause" <?php if ($timer['state']!=='running') echo 'disabled'; ?>>Pause</button>
+                    <button type="submit" name="timer_action" value="stop">Stop</button>
+                </div>
+            </div>
         </form>
         <div>Timer: <span id="timer-display">00:00</span> (<?php echo htmlspecialchars($timer['state']); ?>)</div>
         <hr>
-        <h3>Current Results</h3>
+        <h2>Current Results</h2>
         <div id="admin-results"></div>
         <script>
         function fetchAdminResults() {
