@@ -1,5 +1,0 @@
-What is your favorite programming language?
-Python
-JavaScript
-PHP
-Other
