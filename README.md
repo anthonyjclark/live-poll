@@ -6,10 +6,9 @@ Features to add:
 - [ ] Generic question and answer options
 - [ ] Question types (multiple choice, true/false, etc.)
 - [ ] Option to hide results until the poll is closed
-- [ ] Password for admin page
-- [ ] More options on admin page
 - [ ] Timer
 - [ ] Generate [static QR code](https://qr.io/)
+- [ ] the admin panel should allow a custom question to be created (and custom answers)
 
 Maybe look at Kahoot for ideas?
 
