@@ -24,127 +24,19 @@
     <main class="container">
         <div class="poll">
             <h1 id="question">Loading poll...</h1>
-            <div id="timer-area" style="margin-bottom:1em;"><strong>Timer:</strong> <span
-                    id="timer-display">00:00</span></div>
-            <form id="pollForm"></form>
-            <button id="voteBtn" disabled>Vote</button>
+            <div id="timer-area"><strong>Time:</strong> <span id="timer-display">00:00</span></div>
+            <form id="poll-form"></form>
+            <button id="vote-button" disabled>Submit</button>
             <div id="results" class="results"></div>
         </div>
     </main>
 
     <script>
-        let selectedOption = null;
-        let pollData = null;
-        let lastResetVersion = null;
 
+        //
+        // Utilities (maybe refactor into a separate module)
+        //
 
-        function handleResetVersion(data) {
-            // Only clear selections if this is not the first load and reset_version changed
-            if (lastResetVersion !== null && data.reset_version !== lastResetVersion) {
-                selectedOption = [];
-                const form = document.getElementById('pollForm');
-                Array.from(form.querySelectorAll('input[type=checkbox]')).forEach(cb => cb.checked = false);
-                localStorage.removeItem('poll_voted_version');
-                // Only disable vote button if no selection, otherwise enable if not voted
-                if (form.querySelectorAll('input[type=checkbox]:checked').length === 0) {
-                    document.getElementById('voteBtn').disabled = true;
-                } else {
-                    document.getElementById('voteBtn').disabled = hasVoted();
-                }
-            }
-            // Only update lastResetVersion after the first call
-            if (lastResetVersion === null) {
-                lastResetVersion = data.reset_version;
-            } else if (data.reset_version !== lastResetVersion) {
-                lastResetVersion = data.reset_version;
-            }
-        }
-
-        function fetchPoll() {
-            fetch('update.php')
-                .then(res => res.json())
-                .then(data => {
-                    pollData = data;
-                    document.getElementById('question').textContent = data.question;
-                    const form = document.getElementById('pollForm');
-                    form.innerHTML = '';
-                    // Dynamically create checkboxes for the number of options
-                    data.options.forEach((opt, i) => {
-                        const label = document.createElement('label');
-                        label.innerHTML = `<input type=\"checkbox\" name=\"option\" value=\"${i}\"><span>${opt.text}</span>`;
-                        form.appendChild(label);
-                    });
-                    // Remove any previous event listeners by cloning
-                    const newForm = form.cloneNode(true);
-                    form.parentNode.replaceChild(newForm, form);
-                    newForm.addEventListener('change', e => {
-                        const checked = Array.from(newForm.querySelectorAll('input[type=checkbox]:checked'));
-                        selectedOption = checked.map(cb => parseInt(cb.value));
-                        document.getElementById('voteBtn').disabled = checked.length === 0 || hasVoted();
-                    });
-                    handleResetVersion(data);
-                    if (hasVoted()) {
-                        document.getElementById('voteBtn').disabled = true;
-                    }
-                    showResults(data);
-                });
-        }
-
-        function fetchResults() {
-            fetch('update.php')
-                .then(res => res.json())
-                .then(data => {
-                    showResults(data);
-                    handleResetVersion(data);
-                    if (hasVoted()) {
-                        document.getElementById('voteBtn').disabled = true;
-                    }
-                });
-        }
-
-        function showResults(data) {
-            const total = data.options.reduce((sum, o) => sum + o.votes, 0);
-            const resultsDiv = document.getElementById('results');
-            resultsDiv.innerHTML = '<h3>Results</h3>';
-            data.options.forEach(opt => {
-                const percent = total ? Math.round((opt.votes / total) * 100) : 0;
-                const voteLabel = opt.votes === 1 ? "vote" : "votes";
-                resultsDiv.innerHTML += `<div>${opt.text}: ${opt.votes} ${voteLabel} <progress value="${percent}" max="100"></progress></div>`;
-            });
-        }
-
-        function hasVoted() {
-            const version = pollData && pollData.reset_version;
-            return version && localStorage.getItem('poll_voted_version') === version;
-        }
-
-        document.getElementById('voteBtn').onclick = function () {
-            if (!Array.isArray(selectedOption) || selectedOption.length === 0 || hasVoted()) return;
-            fetch('update.php', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ vote: selectedOption })
-            })
-                .then(res => res.json())
-                .then(data => {
-                    if (data.success) {
-                        if (pollData && pollData.reset_version) {
-                            localStorage.setItem('poll_voted_version', pollData.reset_version);
-                        }
-                        fetchResults();
-                        document.getElementById('voteBtn').disabled = true;
-                    }
-                });
-        };
-
-        // Timer fetch
-        function fetchTimer() {
-            fetch('update.php')
-                .then(res => res.json())
-                .then(data => {
-                    document.getElementById('timer-display').textContent = formatTime(data.timer.remaining);
-                });
-        }
         function formatTime(secs) {
             secs = Math.max(0, parseInt(secs, 10) || 0);
             const m = Math.floor(secs / 60);
@@ -152,13 +44,110 @@
             return (m < 10 ? '0' : '') + m + ':' + (s < 10 ? '0' : '') + s;
         }
 
-        // Initial load
-        fetchPoll();
-        fetchTimer();
 
-        // Poll for poll data (including results and options) every 2 seconds
-        setInterval(fetchPoll, 2000);
-        setInterval(fetchTimer, 500);
+        //
+        // Global state
+        //
+
+        // Refactor to remove global variables if possible
+        let selectedOptions = [];
+        let lastTimestamp = null;
+        let lastPollData = null;
+
+        const form = document.getElementById('poll-form');
+        const voteButton = document.getElementById('vote-button');
+        const resultsDiv = document.getElementById('results');
+
+        voteButton.onclick = handleVote;
+
+
+        function updateResults(data) {
+            const total = data.options.reduce((sum, o) => sum + o.votes, 0);
+            resultsDiv.innerHTML = '<h3>Results</h3>';
+            for (const opt of data.options) {
+                const percent = total ? Math.round((opt.votes / total) * 100) : 0;
+                const voteLabel = opt.votes === 1 ? "vote" : "votes";
+                resultsDiv.innerHTML += `<div>${opt.text}: ${opt.votes} ${voteLabel} <progress value="${percent}" max="100"></progress></div>`;
+            }
+        }
+
+        function hasVoted(data) {
+            const version = data && data.timestamp;
+            return version && localStorage.getItem('vote_timestamp') === version;
+        }
+
+        function pollDataChanged(newData) {
+            if (!lastPollData) return true;
+            if (lastPollData.question !== newData.question) return true;
+            if (lastPollData.timestamp !== newData.timestamp) return true;
+            if (lastPollData.options.length !== newData.options.length) return true;
+            for (let i = 0; i < newData.options.length; i++) {
+                if (lastPollData.options[i].text !== newData.options[i].text) return true;
+                if (lastPollData.options[i].votes !== newData.options[i].votes) return true;
+            }
+            return false;
+        }
+
+
+        function renderPoll(data) {
+            document.getElementById('question').textContent = data.question;
+            form.innerHTML = '';
+
+            if (lastTimestamp !== null && data.timestamp !== lastTimestamp) {
+                selectedOptions = [];
+                localStorage.removeItem('vote_timestamp');
+            }
+
+            lastTimestamp = data.timestamp;
+
+            const voted = hasVoted(data);
+
+            for (const [i, opt] of data.options.entries()) {
+                const label = document.createElement('label');
+                label.innerHTML = `<input type="checkbox" name="option" value="${i}"${voted ? ' disabled' : ''}><span>${opt.text}</span>`;
+                form.appendChild(label);
+            }
+
+            form.addEventListener('change', function () {
+                const checked = Array.from(form.querySelectorAll('input[type=checkbox]:checked'));
+                selectedOptions = checked.map(cb => parseInt(cb.value));
+                voteButton.disabled = checked.length === 0 || voted;
+            });
+
+            voteButton.disabled = voted || selectedOptions.length === 0;
+        }
+
+        function fetchDataAndRender(localVote) {
+            fetch('update.php')
+                .then(res => res.json())
+                .then(data => {
+                    if (pollDataChanged(data)) {
+                        if (localVote === false) renderPoll(data);
+                        updateResults(data);
+                        lastPollData = JSON.parse(JSON.stringify(data));
+                    }
+                });
+        }
+
+        function handleVote() {
+            fetch('update.php', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ vote: selectedOptions })
+            })
+                .then(res => res.json())
+                .then(data => {
+                    if (data.success) {
+                        if (lastPollData && lastPollData.timestamp) localStorage.setItem('vote_timestamp', lastPollData.timestamp);
+                        fetchDataAndRender(true);
+                        voteButton.disabled = true;
+                    }
+                });
+        }
+
+        // Initial load and then poll every 2 seconds
+        fetchDataAndRender(false);
+        setInterval(fetchDataAndRender, 2000);
     </script>
 </body>
 
