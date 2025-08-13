@@ -1,5 +1,7 @@
 # Live Poll
 
+Left off with: broken buttons for setting the number of options.
+
 A simple live poll that I can upload to Domain of One's Own.
 
 Features to add:

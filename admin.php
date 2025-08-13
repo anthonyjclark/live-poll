@@ -85,17 +85,51 @@ if (isset($_POST['timer_action'])) {
     exit;
 }
 
+// Handle number of options change
+if (isset($_POST['set_num_options'])) {
+    $poll_file = 'data.txt';
+    $lines = file($poll_file, FILE_IGNORE_NEW_LINES);
+    $num_options = max(2, min(5, intval($_POST['num_options']))); // Allow 2-5 options
+    // Update options
+    $current_options = array_slice($lines, 1, count($lines) - 8);
+    $current_count = count($current_options);
+    // Always keep 5 options in the file for ease of implementation
+    for ($i = $current_count; $i < 5; $i++) {
+        $current_options[] = 'Option ' . ($i + 1);
+    }
+    $current_options = array_slice($current_options, 0, 5);
+    // Update votes
+    $votes = array_map('intval', explode(',', $lines[count($lines) - 3]));
+    $votes = array_slice($votes, 0, $num_options);
+    while (count($votes) < 5) $votes[] = 0;
+    $votes = array_slice($votes, 0, 5);
+    // Rebuild lines
+    $lines = array_merge([
+        $lines[0],
+        $num_options // store the configured number of options as line 1
+    ], $current_options, [
+        implode(',', $votes),
+        time(),
+        $lines[count($lines) - 1]
+    ]);
+    file_put_contents($poll_file, implode("\n", $lines));
+    header('Location: ' . $_SERVER['REQUEST_URI']);
+    exit;
+}
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && !isset($_POST['admin_passcode']) && !isset($_POST['timer_action'])) {
     $poll_file = 'data.txt';
     $lines = file($poll_file, FILE_IGNORE_NEW_LINES);
-    $lines[7] = '0,0,0,0,0,0';
-    $lines[8] = time();
+    $votes_line = count($lines) - 3;
+    $num_options = intval($lines[1]);
+    $lines[$votes_line] = implode(',', array_fill(0, $num_options, 0));
+    $lines[$votes_line + 1] = time();
     file_put_contents($poll_file, implode("\n", $lines));
     setcookie('reset_message', '1', 0, '/');
     header('Location: ' . $_SERVER['REQUEST_URI']);
     exit;
 }
-// Get timer state from data.txt
+// Get timer state and number of options from data.txt
 $poll_file = 'data.txt';
 $timer = [
     'duration' => 0,
@@ -103,9 +137,12 @@ $timer = [
     'state' => 'stopped',
     'end_time' => null
 ];
+$num_options = 6;
 if (file_exists($poll_file)) {
     $lines = file($poll_file, FILE_IGNORE_NEW_LINES);
-    $timer = json_decode($lines[9], true);
+    $votes_line = count($lines) - 3;
+    $num_options = count(explode(',', $lines[$votes_line]));
+    $timer = json_decode($lines[$votes_line + 2], true);
     if ($timer['state'] === 'running' && $timer['end_time']) {
         $timer['remaining'] = max(0, $timer['end_time'] - time());
         if ($timer['remaining'] <= 0) {
@@ -113,7 +150,7 @@ if (file_exists($poll_file)) {
             $timer['remaining'] = 0;
             $timer['end_time'] = null;
         }
-        $lines[9] = json_encode($timer);
+        $lines[$votes_line + 2] = json_encode($timer);
         file_put_contents($poll_file, implode("\n", $lines));
     }
 }
@@ -130,7 +167,7 @@ if (isset($_COOKIE['reset_message'])) {
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="color-scheme" content="light dark">
-    <link rel="stylesheet" type="text/css" href="css/pico.classless.yellow.min.css">
+    <link rel="stylesheet" type="text/css" href="css/pico.yellow.min.css">
     <title>Live Poll: Admin Panel</title>
     <style>
         .poll {
@@ -145,12 +182,23 @@ if (isset($_COOKIE['reset_message'])) {
 </head>
 
 <body>
-    <main>
+    <main class="container">
     <div class="admin">
         <form method="get" style="float:right;display:inline;">
             <button type="submit" name="logout" value="1">Logout</button>
         </form>
         <h1>Live Poll: Admin Panel</h1>
+        <form method="post">
+            <label>Number of options</label>
+            <div role="group" style="margin-bottom:1em;">
+                <?php for ($i = 2; $i <= 5; $i++): ?>
+                    <button type="submit" name="set_num_options" value="1">
+                        <input type="hidden" name="num_options" value="<?php echo $i; ?>">
+                        <span <?php if ($num_options == $i) echo 'style="font-weight:bold;"'; ?>><?php echo $i; ?></span>
+                    </button>
+                <?php endfor; ?>
+            </div>
+        </form>
         <form method="post">
             <button type="submit">Clear All Votes</button>
         </form>
@@ -167,7 +215,7 @@ if (isset($_COOKIE['reset_message'])) {
                     Set time (seconds):
                     <input type="number" name="timer_duration" min="1" value="<?php echo $timer['duration']; ?>" required style="width: 100%;">
                 </label>
-                <div style="display: flex; gap: 0.5em;">
+                <div role="group">
                     <button type="submit" name="timer_action" value="set">Set</button>
                     <button type="submit" name="timer_action" value="start" <?php if ($timer['state']==='running') echo 'disabled'; ?>>Start</button>
                     <button type="submit" name="timer_action" value="pause" <?php if ($timer['state']!=='running') echo 'disabled'; ?>>Pause</button>

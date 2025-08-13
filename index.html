@@ -5,7 +5,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="color-scheme" content="light dark">
-    <link rel="stylesheet" type="text/css" href="css/pico.classless.yellow.min.css">
+    <link rel="stylesheet" type="text/css" href="css/pico.yellow.min.css">
     <title>Live Poll</title>
     <style>
         .poll {
@@ -21,7 +21,7 @@
 
 <body>
 
-    <main>
+    <main class="container">
         <div class="poll">
             <h1 id="question">Loading poll...</h1>
             <div id="timer-area" style="margin-bottom:1em;"><strong>Timer:</strong> <span
@@ -39,7 +39,7 @@
 
 
         function handleResetVersion(data) {
-            // If reset_version changed, clear selections and vote lock, and re-enable vote button if not voted
+            // Only clear selections if this is not the first load and reset_version changed
             if (lastResetVersion !== null && data.reset_version !== lastResetVersion) {
                 selectedOption = [];
                 const form = document.getElementById('pollForm');
@@ -52,7 +52,12 @@
                     document.getElementById('voteBtn').disabled = hasVoted();
                 }
             }
-            lastResetVersion = data.reset_version;
+            // Only update lastResetVersion after the first call
+            if (lastResetVersion === null) {
+                lastResetVersion = data.reset_version;
+            } else if (data.reset_version !== lastResetVersion) {
+                lastResetVersion = data.reset_version;
+            }
         }
 
         function fetchPoll() {
@@ -63,13 +68,17 @@
                     document.getElementById('question').textContent = data.question;
                     const form = document.getElementById('pollForm');
                     form.innerHTML = '';
+                    // Dynamically create checkboxes for the number of options
                     data.options.forEach((opt, i) => {
                         const label = document.createElement('label');
                         label.innerHTML = `<input type=\"checkbox\" name=\"option\" value=\"${i}\"><span>${opt.text}</span>`;
                         form.appendChild(label);
                     });
-                    form.addEventListener('change', e => {
-                        const checked = Array.from(form.querySelectorAll('input[type=checkbox]:checked'));
+                    // Remove any previous event listeners by cloning
+                    const newForm = form.cloneNode(true);
+                    form.parentNode.replaceChild(newForm, form);
+                    newForm.addEventListener('change', e => {
+                        const checked = Array.from(newForm.querySelectorAll('input[type=checkbox]:checked'));
                         selectedOption = checked.map(cb => parseInt(cb.value));
                         document.getElementById('voteBtn').disabled = checked.length === 0 || hasVoted();
                     });
@@ -77,6 +86,7 @@
                     if (hasVoted()) {
                         document.getElementById('voteBtn').disabled = true;
                     }
+                    showResults(data);
                 });
         }
 
@@ -144,11 +154,10 @@
 
         // Initial load
         fetchPoll();
-        fetchResults();
         fetchTimer();
 
-        // Poll for results every 2 seconds
-        setInterval(fetchResults, 2000);
+        // Poll for poll data (including results and options) every 2 seconds
+        setInterval(fetchPoll, 2000);
         setInterval(fetchTimer, 500);
     </script>
 </body>
