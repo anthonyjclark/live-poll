@@ -6,6 +6,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="color-scheme" content="light dark">
     <link rel="stylesheet" type="text/css" href="css/pico.yellow.min.css">
+    <script src="js/utilities.js"></script>
     <title>Live Poll</title>
     <style>
         .poll {
@@ -23,131 +24,106 @@
 
     <main class="container">
         <div class="poll">
-            <h1 id="question">Loading poll...</h1>
-            <div id="timer-area"><strong>Time:</strong> <span id="timer-display">00:00</span></div>
+            <h1>Live Poll</h1>
+            <h2 id="poll-question">Loading poll...</h2>
             <form id="poll-form"></form>
-            <button id="vote-button" disabled>Submit</button>
-            <div id="results" class="results"></div>
+            <!-- <div id="timer-area"><strong>Time remaining:</strong> <span id="timer-display">00:00</span></div> -->
+            <button id="poll-button" disabled>Submit</button>
+            <div id="poll-results" class="results"></div>
         </div>
     </main>
 
     <script>
 
         //
-        // Utilities (maybe refactor into a separate module)
-        //
-
-        function formatTime(secs) {
-            secs = Math.max(0, parseInt(secs, 10) || 0);
-            const m = Math.floor(secs / 60);
-            const s = secs % 60;
-            return (m < 10 ? '0' : '') + m + ':' + (s < 10 ? '0' : '') + s;
-        }
-
-
-        //
         // Global state
         //
 
-        // Refactor to remove global variables if possible
-        let selectedOptions = [];
-        let lastTimestamp = null;
-        let lastPollData = null;
+        let previousState = null;
+        let voted = false;
 
+        const questionDiv = document.getElementById('poll-question');
         const form = document.getElementById('poll-form');
-        const voteButton = document.getElementById('vote-button');
-        const resultsDiv = document.getElementById('results');
+        const pollButton = document.getElementById('poll-button');
+        const resultsDiv = document.getElementById('poll-results');
 
-        voteButton.onclick = handleVote;
-
-
-        function updateResults(data) {
-            const total = data.options.reduce((sum, o) => sum + o.votes, 0);
-            resultsDiv.innerHTML = '<h3>Results</h3>';
-            for (const opt of data.options) {
-                const percent = total ? Math.round((opt.votes / total) * 100) : 0;
-                const voteLabel = opt.votes === 1 ? "vote" : "votes";
-                resultsDiv.innerHTML += `<div>${opt.text}: ${opt.votes} ${voteLabel} <progress value="${percent}" max="100"></progress></div>`;
-            }
-        }
-
-        function hasVoted(data) {
-            const version = data && data.timestamp;
-            return version && localStorage.getItem('vote_timestamp') === version;
-        }
-
-        function pollDataChanged(newData) {
-            if (!lastPollData) return true;
-            if (lastPollData.question !== newData.question) return true;
-            if (lastPollData.timestamp !== newData.timestamp) return true;
-            if (lastPollData.options.length !== newData.options.length) return true;
-            for (let i = 0; i < newData.options.length; i++) {
-                if (lastPollData.options[i].text !== newData.options[i].text) return true;
-                if (lastPollData.options[i].votes !== newData.options[i].votes) return true;
-            }
-            return false;
-        }
-
-
-        function renderPoll(data) {
-            document.getElementById('question').textContent = data.question;
+        function renderQuestions(state) {
+            questionDiv.textContent = state.question;
             form.innerHTML = '';
-
-            if (lastTimestamp !== null && data.timestamp !== lastTimestamp) {
-                selectedOptions = [];
-                localStorage.removeItem('vote_timestamp');
-            }
-
-            lastTimestamp = data.timestamp;
-
-            const voted = hasVoted(data);
-
-            for (const [i, opt] of data.options.entries()) {
+            for (const [i, question] of state.questions.entries()) {
                 const label = document.createElement('label');
-                label.innerHTML = `<input type="checkbox" name="option" value="${i}"${voted ? ' disabled' : ''}><span>${opt.text}</span>`;
+                label.innerHTML = `<input type="checkbox" name="option" value="${i}"><span>${question}</span>`;
                 form.appendChild(label);
             }
-
-            form.addEventListener('change', function () {
-                const checked = Array.from(form.querySelectorAll('input[type=checkbox]:checked'));
-                selectedOptions = checked.map(cb => parseInt(cb.value));
-                voteButton.disabled = checked.length === 0 || voted;
-            });
-
-            voteButton.disabled = voted || selectedOptions.length === 0;
         }
 
-        function fetchDataAndRender(localVote) {
-            fetch('update.php')
+        function fetchState() {
+            fetch('state.php')
                 .then(res => res.json())
-                .then(data => {
-                    if (pollDataChanged(data)) {
-                        if (localVote === false) renderPoll(data);
-                        updateResults(data);
-                        lastPollData = JSON.parse(JSON.stringify(data));
+                .then(state => {
+                    if (stateChanged(previousState, state)) console.log('State changed:', state);
+
+                    if (!previousState || previousState.timestamp !== state.timestamp) {
+                        renderQuestions(state);
+                        resultsDiv.innerHTML = renderResults(state);
+
+                        voted = false;
+                        pollButton.disabled = true;
+                        pollButton.textContent = 'Submit';
+
                     }
+
+                    updateResults(state, resultsDiv);
+                    updateVotedStatus(state);
+                    previousState = state;
                 });
+        }
+
+        function updateVotedStatus(state) {
+            const storedTimestamp = parseFloat(localStorage.getItem('vote_timestamp') || 0);
+            if (storedTimestamp !== state.timestamp) return;
+            voted = true;
+            pollButton.disabled = true;
+            pollButton.textContent = 'Already Voted';
+            Array.from(form.querySelectorAll('input[type=checkbox]')).forEach(cb => cb.disabled = true);
         }
 
         function handleVote() {
-            fetch('update.php', {
+            // Update local vote immediately for better user experience
+            voted = true;
+            pollButton.disabled = true;
+            pollButton.textContent = 'Already Voted';
+            Array.from(form.querySelectorAll('input[type=checkbox]')).forEach(cb => cb.disabled = true);
+
+            const checked = Array.from(form.querySelectorAll('input[type=checkbox]:checked'));
+            const tempState = JSON.parse(JSON.stringify(previousState));
+            checked.forEach(cb => { tempState.votes[parseInt(cb.value)] += 1; });
+            updateResults(tempState, resultsDiv);
+
+            const selections = checked.map(cb => parseInt(cb.value));
+
+            fetch('state.php', {
                 method: 'POST',
+                body: JSON.stringify({ vote: selections }),
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ vote: selectedOptions })
             })
                 .then(res => res.json())
-                .then(data => {
-                    if (data.success) {
-                        if (lastPollData && lastPollData.timestamp) localStorage.setItem('vote_timestamp', lastPollData.timestamp);
-                        fetchDataAndRender(true);
-                        voteButton.disabled = true;
-                    }
+                .then(status => {
+                    if (status.success) localStorage.setItem('vote_timestamp', previousState.timestamp);
+                    // NOTE: What if not successful?
                 });
         }
 
-        // Initial load and then poll every 2 seconds
-        fetchDataAndRender(false);
-        setInterval(fetchDataAndRender, 2000);
+        function handleSelections() {
+            const checked = Array.from(form.querySelectorAll('input[type=checkbox]:checked'));
+            pollButton.disabled = checked.length === 0 || voted;
+        };
+
+        form.onchange = handleSelections;
+        pollButton.onclick = handleVote;
+
+        fetchState();
+        setInterval(fetchState, 2000);
     </script>
 </body>
 
