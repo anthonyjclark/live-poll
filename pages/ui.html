@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="color-scheme" content="light dark">
+    <link rel="stylesheet" type="text/css" href="css/pico.yellow.min.css">
+    <script src="js/utilities.js"></script>
+    <title>Live Poll: Admin Panel</title>
+    <style>
+        .container {
+            max-width: min(100vw, 600px);
+            margin: auto;
+        }
+    </style>
+</head>
+
+<body>
+    <main class="container">
+        <div>
+            <form method="get" style="float:right;display:inline;">
+                <button type="submit" name="logout" value="1">Logout</button>
+            </form>
+
+            <h1>Live Poll: Admin Panel</h1>
+
+            <form method="post">
+                <button id="reset-button" class="reset" type="submit" value="reset">Reset Votes</button>
+            </form>
+
+            <div id="poll-results"></div>
+
+            <form method="post">
+                <label>Number of options</label>
+                <div role="group">
+                    <button type="submit" name="set_num_options" value="2">2</button>
+                    <button type="submit" name="set_num_options" value="3">3</button>
+                    <button type="submit" name="set_num_options" value="4">4</button>
+                    <button type="submit" name="set_num_options" value="5">5</button>
+                </div>
+            </form>
+
+            <form method="post">
+                <label style="margin: 0; flex: 1;">
+                    Timer duration (<span id="timer-display">00:00</span> / <span id="slider-value"></span>)
+                    <input type="range" name="timer_duration" id="timer-slider" min="0" max="600" step="30">
+                </label>
+                <div role="group">
+                    <button type="submit" name="timer_state" value="start">Start</button>
+                    <button type="submit" name="timer_state" value="stop">Stop</button>
+                </div>
+            </form>
+
+            <script>
+                let previousState = null;
+                const resultsDiv = document.getElementById('poll-results');
+
+                function fetchState() {
+                    fetch('state.php')
+                        .then(res => res.json())
+                        .then(state => {
+                            if (stateChanged(previousState, state)) console.log('State changed:', state);
+
+                            if (!previousState || previousState.timestamp !== state.timestamp) {
+                                resultsDiv.innerHTML = renderResults(state);
+                            }
+                            updateResults(state, resultsDiv);
+                        });
+                }
+
+                var slider = document.getElementById('timer-slider');
+                var valueSpan = document.getElementById('slider-value');
+                function updateSliderValue() { valueSpan.textContent = formatTime(slider.value); }
+                slider.addEventListener('input', updateSliderValue);
+
+                document.getElementById('reset-button').onclick = function (e) {
+                    e.preventDefault();
+                    fetch('admin.php', {
+                        method: 'POST',
+                        body: JSON.stringify({ reset: true }),
+                        headers: { 'Content-Type': 'application/json' }
+                    })
+                        .then(res => res.json())
+                        .then(data => {
+                            if (data.success) {
+                                // Optionally refresh results or show a message
+                            }
+                        });
+                };
+
+                document.querySelectorAll('button[name="set_num_options"]').forEach(btn => {
+                    btn.addEventListener('click', function (e) {
+                        e.preventDefault();
+                        fetch('admin.php', {
+                            method: 'POST',
+                            body: JSON.stringify({ set_num_options: this.value }),
+                            headers: { 'Content-Type': 'application/json' }
+                        })
+                            .then(res => res.json())
+                            .then(data => {
+                                if (data.success) {
+                                    fetchState();
+                                }
+                            });
+                    });
+                });
+
+                // Initialize slider value, fetch initial state, and set up periodic updates
+                updateSliderValue();
+                fetchState();
+                setInterval(fetchState, 2000);
+            </script>
+        </div>
+    </main>
+</body>
+
+</html>
