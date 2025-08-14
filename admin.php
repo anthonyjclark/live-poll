@@ -20,7 +20,7 @@ if (isset($_POST['admin_passcode'])) {
 
 // Display the login page if not authenticated
 if (empty($_SESSION['admin_authenticated'])) {
-    include 'pages/login.php';
+    include 'login.php';
     exit;
 }
 
@@ -71,5 +71,5 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 }
 
-include 'pages/ui.html';
+include 'ui.html';
 ?>

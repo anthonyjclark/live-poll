@@ -5,7 +5,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Admin Login</title>
-    <link rel="stylesheet" type="text/css" href="css/pico.yellow.min.css">
+    <link rel="stylesheet" type="text/css" href="pico.yellow.min.css">
 </head>
 
 <body>
